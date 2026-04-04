@@ -1,9 +1,32 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
+:root {
+  --pm-pasteboard: #d4d4d4;
+  --pm-stage: #ffffff;
+  --pm-panel: #f0f0f0;
+  --pm-panel-header: #505050;
+  --pm-timeline-bg: #3a3a3a;
+  --pm-red: #ec1c24;
+  --pm-border: #b8b8b8;
+  --pm-text: #1a1a1a;
+  --pm-text-dim: #888888;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  background: #030712;
-  color: #ededed;
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--pm-pasteboard);
+  color: var(--pm-text);
+  font-family: "Archivo", system-ui, sans-serif;
+  font-size: 12px;
   margin: 0;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: "JetBrains Mono", monospace;
 }
