@@ -1,36 +1,143 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+🎭 PuppetMaster
 
-## Getting Started
+PuppetMaster is Flash reimagined for the AI era — instead of keyframing animations by hand, you perform them with your body.
 
-First, run the development server:
+⸻
 
-```bash
+🚀 Overview
+
+PuppetMaster is a browser-based 2D animation studio that uses real-time pose detection to turn your body movements into character animation.
+
+No installs. No plugins. No expensive software.
+
+Just open your laptop, move, and animate.
+
+⸻
+
+✨ Features
+	•	🎥 Real-Time Motion Capture
+Uses your webcam to track 33 body landmarks and map them onto a 2D puppet live at ~30fps.
+	•	🧍 Perform-Based Animation
+Animate by acting — your body becomes the controller.
+	•	✋ Gesture Controls
+Start/stop recording using hand gestures (no mouse required).
+	•	🎬 Timeline Editor (NLE-style)
+	•	Scrub through frames
+	•	Trim clips
+	•	Append recordings
+	•	Non-linear editing workflow
+	•	🧈 Motion Smoothing
+Apply rolling-average smoothing for cleaner animations.
+	•	📦 Export Anywhere
+Export as a standalone HTML file — shareable, portable, runs in any browser.
+
+⸻
+
+🧠 How It Works
+	1.	Webcam captures video input
+	2.	Pose detection extracts 33 skeletal landmarks per frame
+	3.	Landmarks are transformed into joint rotations
+	4.	A rigged 2D character is rendered on canvas
+	5.	Motion data is recorded into a timeline buffer
+	6.	Playback, edit, smooth, and export
+
+⸻
+
+🛠️ Tech Stack
+	•	Frontend: React + HTML5 Canvas
+	•	Pose Detection: MediaPipe Pose
+	•	Rendering: Canvas 2D API
+	•	State Handling: useRef for real-time data (avoids re-render lag)
+
+⸻
+
+⚡ Performance
+	•	Runs at ~30fps in-browser
+	•	Minimal React re-renders (~4/sec)
+	•	All animation logic runs outside React’s render cycle
+
+⸻
+
+🎮 Controls
+
+Action	Gesture
+Start Recording	Right hand above head (hold)
+Stop / Play	Left hand above head (hold)
+Cancel	Both hands above head
+
+
+⸻
+
+📤 Export
+	•	JSON → raw animation data
+	•	HTML Player → self-contained animation file
+	•	No dependencies
+	•	Auto-play + loop
+	•	Works offline
+
+⸻
+
+🔮 Vision
+
+PuppetMaster is the foundation for a spatial animation OS:
+	•	Import custom characters & rigs
+	•	Layer multiple animations
+	•	Build motion libraries
+	•	Collaborate in real time
+	•	Publish directly to the web
+
+⸻
+
+🧪 Demo Use Cases
+	•	Social media animations
+	•	Indie game character prototyping
+	•	Storyboarding
+	•	Educational content
+	•	Meme creation (yes, really)
+
+⸻
+
+🏁 Getting Started
+
+git clone https://github.com/your-username/puppetmaster.git
+cd puppetmaster
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open in browser → enable camera → start moving.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+⸻
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+⚠️ Requirements
+	•	Webcam access
+	•	Modern browser (Chrome recommended)
+	•	Good lighting for best tracking
 
-## Learn More
+⸻
 
-To learn more about Next.js, take a look at the following resources:
+💡 Why This Matters
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Animation has always been gated by time, skill, and tools.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+PuppetMaster removes that barrier.
 
-## Deploy on Vercel
+You don’t animate anymore —
+you perform.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+⸻
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+📄 License
+
+MIT (or choose your preferred license)
+
+⸻
+
+🙌 Acknowledgements
+	•	MediaPipe for pose detection
+	•	The web platform for making this possible
+
+⸻
+
+👀 Final Thought
+
+Every creator with a webcam is now an animator.
