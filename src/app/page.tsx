@@ -7,7 +7,6 @@ const MOCAP_W = 320;
 const MOCAP_H = 240;
 const STAGE_W = 800;
 const STAGE_H = 560;
-const TIMELINE_H = 80;
 /** Timeline bar spans at least this many “slots” so ~1 min @ 30fps fits the full width when the clip is short. */
 const TIMELINE_ASSUMED_FPS = 30;
 const TIMELINE_MIN_VISIBLE_FRAMES = TIMELINE_ASSUMED_FPS * 60;
@@ -39,6 +38,47 @@ type FrameData = {
   landmarks: Landmark[][];
   timestamp: number;
 };
+
+// ─── Layered Asset Types ─────────────────────────────────────
+type BuiltinAsset = "star" | "circle" | "diamond" | "hat" | "heart" | "sword";
+
+type LayerFrameData = {
+  x: number;
+  y: number;
+  timestamp: number;
+};
+
+type AssetLayer = {
+  id: string;
+  name: string;
+  asset: BuiltinAsset;
+  boundLandmark: number | null;
+  scale: number;
+  buffer: LayerFrameData[];
+  visible: boolean;
+};
+
+const TRACKABLE_LANDMARKS: { idx: number; label: string }[] = [
+  { idx: 0, label: "Head" },
+  { idx: 15, label: "L.Hand" },
+  { idx: 16, label: "R.Hand" },
+  { idx: 11, label: "L.Shoulder" },
+  { idx: 12, label: "R.Shoulder" },
+  { idx: 27, label: "L.Foot" },
+  { idx: 28, label: "R.Foot" },
+];
+
+const ASSET_LABEL: Record<BuiltinAsset, string> = {
+  star: "★ Star",
+  circle: "● Circle",
+  diamond: "◆ Diamond",
+  hat: "🎩 Hat",
+  heart: "♥ Heart",
+  sword: "⚔ Sword",
+};
+
+const LAYER_TRACK_H = 24;
+const TIMELINE_H_BASE = 56;
 
 // ─── Skeleton Connections (for wireframe) ────────────────────
 const WIRE_CONNECTIONS: [number, number][] = [
@@ -311,6 +351,136 @@ function drawCharacterOnCanvas(
   }
 }
 
+// ─── Built-in Asset Drawing ──────────────────────────────────
+function drawBuiltinAsset(
+  ctx: CanvasRenderingContext2D,
+  asset: BuiltinAsset,
+  cx: number,
+  cy: number,
+  scale: number
+) {
+  const s = 24 * scale;
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  switch (asset) {
+    case "star": {
+      ctx.fillStyle = "#f1c40f";
+      ctx.strokeStyle = "#e67e22";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? s : s * 0.45;
+        const a = (Math.PI / 5) * i - Math.PI / 2;
+        if (i === 0) ctx.moveTo(r * Math.cos(a), r * Math.sin(a));
+        else ctx.lineTo(r * Math.cos(a), r * Math.sin(a));
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      break;
+    }
+    case "circle":
+      ctx.beginPath();
+      ctx.arc(0, 0, s, 0, Math.PI * 2);
+      ctx.fillStyle = "#e74c3c";
+      ctx.fill();
+      ctx.strokeStyle = "#c0392b";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      break;
+    case "diamond":
+      ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = "#9b59b6";
+      ctx.fillRect(-s * 0.7, -s * 0.7, s * 1.4, s * 1.4);
+      ctx.strokeStyle = "#7d3c98";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-s * 0.7, -s * 0.7, s * 1.4, s * 1.4);
+      break;
+    case "hat":
+      // Top hat
+      ctx.fillStyle = "#2c3e50";
+      ctx.fillRect(-s * 0.8, -s * 0.3, s * 1.6, s * 0.3); // brim
+      ctx.fillRect(-s * 0.5, -s, s * 1.0, s * 0.7); // crown
+      ctx.strokeStyle = "#1a252f";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-s * 0.8, -s * 0.3, s * 1.6, s * 0.3);
+      ctx.strokeRect(-s * 0.5, -s, s * 1.0, s * 0.7);
+      // Band
+      ctx.fillStyle = "#ec1c24";
+      ctx.fillRect(-s * 0.5, -s * 0.45, s * 1.0, s * 0.12);
+      break;
+    case "heart": {
+      ctx.fillStyle = "#e74c3c";
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.3);
+      ctx.bezierCurveTo(-s, -s * 0.3, -s * 0.5, -s, 0, -s * 0.4);
+      ctx.bezierCurveTo(s * 0.5, -s, s, -s * 0.3, 0, s * 0.3);
+      ctx.fill();
+      ctx.strokeStyle = "#c0392b";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      break;
+    }
+    case "sword": {
+      // Blade
+      ctx.fillStyle = "#bdc3c7";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 1.2);
+      ctx.lineTo(-s * 0.12, s * 0.3);
+      ctx.lineTo(s * 0.12, s * 0.3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#95a5a6";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Crossguard
+      ctx.fillStyle = "#e67e22";
+      ctx.fillRect(-s * 0.4, s * 0.25, s * 0.8, s * 0.12);
+      // Grip
+      ctx.fillStyle = "#8b4513";
+      ctx.fillRect(-s * 0.08, s * 0.37, s * 0.16, s * 0.4);
+      // Pommel
+      ctx.beginPath();
+      ctx.arc(0, s * 0.82, s * 0.1, 0, Math.PI * 2);
+      ctx.fillStyle = "#e67e22";
+      ctx.fill();
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+function drawLayersOnStage(
+  ctx: CanvasRenderingContext2D,
+  layers: AssetLayer[],
+  landmarks: Landmark[][] | null,
+  isPlaying: boolean,
+  pbIdx: number,
+  W: number,
+  H: number
+) {
+  for (const layer of layers) {
+    if (!layer.visible || layer.boundLandmark === null) continue;
+
+    let x: number, y: number;
+
+    if (isPlaying && layer.buffer.length > 0) {
+      const frame = layer.buffer[Math.min(pbIdx, layer.buffer.length - 1)];
+      x = (1 - frame.x) * W;
+      y = frame.y * H;
+    } else if (landmarks?.[0]) {
+      const lm = landmarks[0][layer.boundLandmark];
+      if (!lm || !vis(lm)) continue;
+      [x, y] = toCS(lm, W, H);
+    } else {
+      continue;
+    }
+
+    drawBuiltinAsset(ctx, layer.asset, x, y, layer.scale);
+  }
+}
+
 // ─── MoCap Wireframe Drawing ─────────────────────────────────
 // NOTE: MoCap canvas has CSS transform: scaleX(-1) for selfie mirror.
 // We draw in RAW camera space (no X-flip) so wireframe aligns with video.
@@ -321,7 +491,8 @@ function toMoCap(lm: Landmark): [number, number] {
 function drawMoCap(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
-  landmarks: Landmark[][] | null
+  landmarks: Landmark[][] | null,
+  bindMode = false
 ) {
   // Blit video frame (raw camera space)
   ctx.drawImage(video, 0, 0, MOCAP_W, MOCAP_H);
@@ -361,6 +532,27 @@ function drawMoCap(
     ctx.arc(x, y, 3, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  // Bind mode hotspots
+  if (bindMode) {
+    for (const { idx, label } of TRACKABLE_LANDMARKS) {
+      if (!vis(lm[idx])) continue;
+      const [x, y] = toMoCap(lm[idx]);
+      // Pulsing orange target
+      ctx.beginPath();
+      ctx.arc(x, y, 14, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(230, 126, 34, 0.45)";
+      ctx.fill();
+      ctx.strokeStyle = "#e67e22";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      // Label
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 9px Archivo, sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, x + 18, y);
+    }
+  }
 }
 
 // ─── Timeline layout (min width = 1 minute @ TIMELINE_ASSUMED_FPS; longer clips still fit whole bar) ────
@@ -371,7 +563,7 @@ function timelineMaxVisible(bufferLen: number) {
 function frameIndexFromCanvasX(canvasX: number, canvasW: number, bufferLen: number) {
   if (bufferLen <= 0) return 0;
   const mv = timelineMaxVisible(bufferLen);
-  let idx = Math.floor((canvasX / canvasW) * mv);
+  const idx = Math.floor((canvasX / canvasW) * mv);
   return Math.max(0, Math.min(idx, bufferLen - 1));
 }
 
@@ -411,9 +603,11 @@ function drawTimeline(
   trimIn: number,
   trimOut: number,
   isRecording: boolean,
-  showTrimHandles: boolean
+  showTrimHandles: boolean,
+  layers: AssetLayer[] = []
 ) {
-  const h = TIMELINE_H;
+  const totalH = TIMELINE_H_BASE + layers.length * LAYER_TRACK_H;
+  const h = TIMELINE_H_BASE;
   ctx.fillStyle = "#3a3a3a";
   ctx.fillRect(0, 0, canvasW, h);
 
@@ -506,10 +700,63 @@ function drawTimeline(
     ctx.closePath();
     ctx.fill();
   }
+
+  // ── Layer tracks ──
+  const layerMaxVis = bufferLen > 0 ? timelineMaxVisible(bufferLen) : TIMELINE_MIN_VISIBLE_FRAMES;
+  for (let li = 0; li < layers.length; li++) {
+    const layer = layers[li];
+    const yOff = h + li * LAYER_TRACK_H;
+
+    // Track background
+    ctx.fillStyle = li % 2 === 0 ? "#333" : "#2e2e2e";
+    ctx.fillRect(0, yOff, canvasW, LAYER_TRACK_H);
+
+    // Track separator
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, yOff);
+    ctx.lineTo(canvasW, yOff);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = "#999";
+    ctx.font = "9px 'JetBrains Mono', monospace";
+    const labelStr =
+      (ASSET_LABEL[layer.asset]?.charAt(0) ?? "?") +
+      " " +
+      layer.name +
+      (layer.boundLandmark !== null
+        ? " → " + (TRACKABLE_LANDMARKS.find((t) => t.idx === layer.boundLandmark)?.label ?? "?")
+        : "");
+    ctx.fillText(labelStr, 4, yOff + 16);
+
+    // Filled cells
+    if (layer.buffer.length > 0 && bufferLen > 0) {
+      const color = layer.visible ? "#5dade2" : "#555";
+      for (let i = 0; i < layer.buffer.length; i++) {
+        const x = (i / layerMaxVis) * canvasW;
+        const cw = canvasW / layerMaxVis;
+        ctx.fillStyle = color;
+        ctx.fillRect(x, yOff + 4, Math.max(1, cw - 0.5), LAYER_TRACK_H - 8);
+      }
+    }
+  }
+
+  // Extend playhead across layer tracks
+  if (bufferLen > 0 && layers.length > 0) {
+    const headX = ((playbackIdx + 0.5) / layerMaxVis) * canvasW;
+    ctx.strokeStyle = "#ec1c24";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(headX, h);
+    ctx.lineTo(headX, totalH);
+    ctx.stroke();
+  }
 }
 
 // ─── Standalone HTML Export ──────────────────────────────────
-function generatePlayerHTML(timelineJSON: string): string {
+function generatePlayerHTML(timelineJSON: string, layersJSON: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -531,6 +778,7 @@ p{font-size:11px;color:#888;margin-top:10px}
 <p>Auto-playing recorded animation</p>
 <script>
 const T=${timelineJSON};
+const L=${layersJSON};
 const ctx=document.getElementById("c").getContext("2d");
 let si=0,st=performance.now();
 function pt(l,W,H){return[(1-l.x)*W,l.y*H]}
@@ -548,6 +796,29 @@ ctx.fillStyle=f;ctx.fill();ctx.strokeStyle=s;ctx.lineWidth=1.5;ctx.stroke();ctx.
 function joint(i,lm){if(!v(lm[i]))return;const[x,y]=pt(lm[i],800,560);
 ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fillStyle="#e67e22";ctx.fill();
 ctx.strokeStyle="#c0561a";ctx.lineWidth=1.5;ctx.stroke();}
+function asset(a,cx,cy,sc){
+const s=24*sc;ctx.save();ctx.translate(cx,cy);
+switch(a){
+case"star":ctx.fillStyle="#f1c40f";ctx.strokeStyle="#e67e22";ctx.lineWidth=2;ctx.beginPath();
+for(let i=0;i<10;i++){const r=i%2===0?s:s*.45,ag=(Math.PI/5)*i-Math.PI/2;
+i===0?ctx.moveTo(r*Math.cos(ag),r*Math.sin(ag)):ctx.lineTo(r*Math.cos(ag),r*Math.sin(ag))}
+ctx.closePath();ctx.fill();ctx.stroke();break;
+case"circle":ctx.beginPath();ctx.arc(0,0,s,0,Math.PI*2);ctx.fillStyle="#e74c3c";ctx.fill();
+ctx.strokeStyle="#c0392b";ctx.lineWidth=2;ctx.stroke();break;
+case"diamond":ctx.rotate(Math.PI/4);ctx.fillStyle="#9b59b6";ctx.fillRect(-s*.7,-s*.7,s*1.4,s*1.4);
+ctx.strokeStyle="#7d3c98";ctx.lineWidth=2;ctx.strokeRect(-s*.7,-s*.7,s*1.4,s*1.4);break;
+case"hat":ctx.fillStyle="#2c3e50";ctx.fillRect(-s*.8,-s*.3,s*1.6,s*.3);ctx.fillRect(-s*.5,-s,s,s*.7);
+ctx.strokeStyle="#1a252f";ctx.lineWidth=1.5;ctx.strokeRect(-s*.8,-s*.3,s*1.6,s*.3);ctx.strokeRect(-s*.5,-s,s,s*.7);
+ctx.fillStyle="#ec1c24";ctx.fillRect(-s*.5,-s*.45,s,s*.12);break;
+case"heart":ctx.fillStyle="#e74c3c";ctx.beginPath();ctx.moveTo(0,s*.3);
+ctx.bezierCurveTo(-s,-s*.3,-s*.5,-s,0,-s*.4);ctx.bezierCurveTo(s*.5,-s,s,-s*.3,0,s*.3);
+ctx.fill();ctx.strokeStyle="#c0392b";ctx.lineWidth=2;ctx.stroke();break;
+case"sword":ctx.fillStyle="#bdc3c7";ctx.beginPath();ctx.moveTo(0,-s*1.2);ctx.lineTo(-s*.12,s*.3);ctx.lineTo(s*.12,s*.3);
+ctx.closePath();ctx.fill();ctx.strokeStyle="#95a5a6";ctx.lineWidth=1;ctx.stroke();
+ctx.fillStyle="#e67e22";ctx.fillRect(-s*.4,s*.25,s*.8,s*.12);
+ctx.fillStyle="#8b4513";ctx.fillRect(-s*.08,s*.37,s*.16,s*.4);
+ctx.beginPath();ctx.arc(0,s*.82,s*.1,0,Math.PI*2);ctx.fillStyle="#e67e22";ctx.fill();break;
+}ctx.restore();}
 function draw(lm){
 ctx.fillStyle="#fff";ctx.fillRect(0,0,800,560);
 ctx.strokeStyle="rgba(0,0,0,0.04)";ctx.lineWidth=1;
@@ -589,7 +860,11 @@ const el=performance.now()-st,bt=T[0].timestamp;
 let i=si;
 while(i<T.length-1&&T[i+1].timestamp-bt<=el)i++;
 if(i>=T.length-1){si=0;st=performance.now();i=0}else si=i;
-draw(T[i].landmarks)}
+draw(T[i].landmarks);
+for(const layer of L){
+if(!layer.visible||!layer.buffer||!layer.buffer.length)continue;
+const lf=layer.buffer[Math.min(i,layer.buffer.length-1)];
+asset(layer.asset,(1-lf.x)*800,lf.y*560,layer.scale||1);}}
 loop();
 </script>
 </body>
@@ -612,6 +887,9 @@ export default function PuppetMaster() {
   const [error, setError] = useState<string | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [gestureHud, setGestureHud] = useState<GestureHudState>(null);
+  const [layers, setLayers] = useState<AssetLayer[]>([]);
+  const [bindingLayerId, setBindingLayerId] = useState<string | null>(null);
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null); // null = puppet is active target
 
   // ─── Refs (30fps mutation, never trigger re-render) ────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -648,6 +926,9 @@ export default function PuppetMaster() {
     trimOut0: number;
   } | null>(null);
   const lastGestureHudJsonRef = useRef<string>("");
+  const layersRef = useRef<AssetLayer[]>([]);
+  const bindingLayerIdRef = useRef<string | null>(null);
+  const activeLayerIdRef = useRef<string | null>(null);
   /** performance.now() when pre–record “Get ready” countdown ends and capture should start; 0 = idle */
   const preRecordCountdownEndRef = useRef(0);
 
@@ -665,7 +946,8 @@ export default function PuppetMaster() {
       trimStartIdxRef.current,
       trimEndIdxRef.current,
       isRecRef.current,
-      !isPlayRef.current && !isRecRef.current && bufferRef.current.length > 0
+      !isPlayRef.current && !isRecRef.current && bufferRef.current.length > 0,
+      layersRef.current
     );
   }, []);
 
@@ -810,22 +1092,66 @@ export default function PuppetMaster() {
       }
     }
 
-    // Phase 2: Record
+    // Phase 2: Record — exclusively to the active target
     if (isRecRef.current && landmarksRef.current) {
-      bufferRef.current.push({
-        landmarks: structuredClone(landmarksRef.current),
-        timestamp: performance.now(),
-      });
+      const alId = activeLayerIdRef.current;
+      if (alId === null) {
+        // Recording to puppet buffer
+        bufferRef.current.push({
+          landmarks: structuredClone(landmarksRef.current),
+          timestamp: performance.now(),
+        });
+      } else {
+        // Recording to a specific layer buffer only
+        const layer = layersRef.current.find((l) => l.id === alId);
+        if (layer && layer.boundLandmark !== null) {
+          const bl = landmarksRef.current[0][layer.boundLandmark];
+          if (bl) {
+            layer.buffer.push({ x: bl.x, y: bl.y, timestamp: performance.now() });
+          }
+        }
+      }
     }
 
     // Phase 3a: MoCap canvas (live mode only — draw video + wireframe)
     if (!isPlayRef.current && mocapCtxRef.current && videoRef.current) {
-      drawMoCap(mocapCtxRef.current, videoRef.current, landmarksRef.current);
+      drawMoCap(mocapCtxRef.current, videoRef.current, landmarksRef.current, bindingLayerIdRef.current !== null);
     }
 
     // Phase 3b: Stage canvas
+    // During playback → always composite everything (puppet + all layers).
+    // During live/recording → isolate to active target only.
     if (stageCtxRef.current) {
-      drawCharacterOnCanvas(stageCtxRef.current, landmarksRef.current, STAGE_W, STAGE_H);
+      const alId = activeLayerIdRef.current;
+      const compositeAll = isPlayRef.current || alId === null;
+
+      if (compositeAll) {
+        // Full composite: puppet + all layers
+        drawCharacterOnCanvas(stageCtxRef.current, landmarksRef.current, STAGE_W, STAGE_H);
+        drawLayersOnStage(stageCtxRef.current, layersRef.current, landmarksRef.current, isPlayRef.current, pbIdxRef.current, STAGE_W, STAGE_H);
+      } else {
+        // Recording an asset layer: show only that asset
+        const activeLayer = layersRef.current.find((l) => l.id === alId);
+        stageCtxRef.current.fillStyle = "#ffffff";
+        stageCtxRef.current.fillRect(0, 0, STAGE_W, STAGE_H);
+        stageCtxRef.current.strokeStyle = "rgba(0, 0, 0, 0.04)";
+        stageCtxRef.current.lineWidth = 1;
+        for (let gx = 0; gx < STAGE_W; gx += 40) {
+          stageCtxRef.current.beginPath();
+          stageCtxRef.current.moveTo(gx, 0);
+          stageCtxRef.current.lineTo(gx, STAGE_H);
+          stageCtxRef.current.stroke();
+        }
+        for (let gy = 0; gy < STAGE_H; gy += 40) {
+          stageCtxRef.current.beginPath();
+          stageCtxRef.current.moveTo(0, gy);
+          stageCtxRef.current.lineTo(STAGE_W, gy);
+          stageCtxRef.current.stroke();
+        }
+        if (activeLayer) {
+          drawLayersOnStage(stageCtxRef.current, [activeLayer], landmarksRef.current, false, pbIdxRef.current, STAGE_W, STAGE_H);
+        }
+      }
     }
 
     // Phase 4: Throttled debug + timeline update (4Hz)
@@ -852,9 +1178,20 @@ export default function PuppetMaster() {
       } else {
         setDebugLWrist("—");
       }
-      setFrameCount(bufferRef.current.length);
+      // Update frame count — use active target's buffer length
+      const alId = activeLayerIdRef.current;
+      if (alId === null) {
+        setFrameCount(bufferRef.current.length);
+      } else {
+        const al = layersRef.current.find((l) => l.id === alId);
+        setFrameCount(al ? al.buffer.length : 0);
+      }
+      // Sync layers state so UI frame counts refresh during layer recording
+      if (isRecRef.current && alId !== null) {
+        setLayers([...layersRef.current]);
+      }
 
-      if (isRecRef.current && bufferRef.current.length > 0) {
+      if (isRecRef.current && bufferRef.current.length > 0 && alId === null) {
         trimStartIdxRef.current = 0;
         trimEndIdxRef.current = bufferRef.current.length - 1;
       }
@@ -1073,6 +1410,82 @@ export default function PuppetMaster() {
     [applyTimelineTrim, redrawTimelineCanvas, scrubTimelineAtEvent]
   );
 
+  // ─── Layer Handlers ──────────────────────────────────────────
+  const syncLayersRef = useCallback((updated: AssetLayer[]) => {
+    layersRef.current = updated;
+    setLayers([...updated]);
+  }, []);
+
+  const addLayer = useCallback(() => {
+    const next: AssetLayer = {
+      id: crypto.randomUUID(),
+      name: `Layer ${layersRef.current.length + 1}`,
+      asset: "star",
+      boundLandmark: null,
+      scale: 1,
+      buffer: [],
+      visible: true,
+    };
+    syncLayersRef([...layersRef.current, next]);
+  }, [syncLayersRef]);
+
+  const removeLayer = useCallback((id: string) => {
+    syncLayersRef(layersRef.current.filter((l) => l.id !== id));
+    if (bindingLayerIdRef.current === id) {
+      bindingLayerIdRef.current = null;
+      setBindingLayerId(null);
+    }
+  }, [syncLayersRef]);
+
+  const updateLayer = useCallback((id: string, patch: Partial<AssetLayer>) => {
+    const updated = layersRef.current.map((l) => (l.id === id ? { ...l, ...patch } : l));
+    syncLayersRef(updated);
+  }, [syncLayersRef]);
+
+  const enterBindMode = useCallback((layerId: string) => {
+    bindingLayerIdRef.current = layerId;
+    setBindingLayerId(layerId);
+  }, []);
+
+  const selectActiveLayer = useCallback((layerId: string | null) => {
+    activeLayerIdRef.current = layerId;
+    setActiveLayerId(layerId);
+  }, []);
+
+  const handleMoCapClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!bindingLayerIdRef.current) return;
+    const canvas = mocapCanvasRef.current;
+    if (!canvas || !landmarksRef.current?.[0]) return;
+
+    // Use clientX/getBoundingClientRect to avoid CSS transform: scaleX(-1) ambiguity.
+    // Visual left = raw canvas right (mirrored), so un-mirror via (1 - fraction).
+    const rect = canvas.getBoundingClientRect();
+    const cssX = e.clientX - rect.left;
+    const cssY = e.clientY - rect.top;
+    const rawCanvasX = (1 - cssX / rect.width) * MOCAP_W;
+    const rawCanvasY = (cssY / rect.height) * MOCAP_H;
+
+    const lm = landmarksRef.current[0];
+    let bestIdx = -1;
+    let bestDist = 30; // max click radius in canvas pixels
+
+    for (const { idx } of TRACKABLE_LANDMARKS) {
+      if (!vis(lm[idx])) continue;
+      const [lx, ly] = toMoCap(lm[idx]);
+      const d = Math.hypot(rawCanvasX - lx, rawCanvasY - ly);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = idx;
+      }
+    }
+
+    if (bestIdx >= 0) {
+      updateLayer(bindingLayerIdRef.current, { boundLandmark: bestIdx });
+      bindingLayerIdRef.current = null;
+      setBindingLayerId(null);
+    }
+  }, [updateLayer]);
+
   const toggleRec = useCallback(() => {
     if (isRecRef.current) {
       finalizeRecordingStop(performance.now(), "button_or_right");
@@ -1101,6 +1514,8 @@ export default function PuppetMaster() {
     pbIdxRef.current = 0;
     trimStartIdxRef.current = 0;
     trimEndIdxRef.current = 0;
+    // Clear layer buffers too
+    for (const layer of layersRef.current) layer.buffer = [];
     setFrameCount(0);
     redrawTimelineCanvas();
   }, [redrawTimelineCanvas]);
@@ -1135,6 +1550,14 @@ export default function PuppetMaster() {
       smoothed: isSmoothRef.current,
       timeline: isSmoothRef.current ? smoothBufRef.current : bufferRef.current,
       character: "puppet-default",
+      layers: layersRef.current.map((l) => ({
+        name: l.name,
+        asset: l.asset,
+        boundLandmark: l.boundLandmark,
+        scale: l.scale,
+        visible: l.visible,
+        buffer: l.buffer,
+      })),
     };
     const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
     const a = document.createElement("a");
@@ -1147,7 +1570,13 @@ export default function PuppetMaster() {
 
   const doExportHTML = useCallback(() => {
     const buf = isSmoothRef.current ? smoothBufRef.current : bufferRef.current;
-    const html = generatePlayerHTML(JSON.stringify(buf));
+    const layersExport = layersRef.current.map((l) => ({
+      asset: l.asset,
+      scale: l.scale,
+      visible: l.visible,
+      buffer: l.buffer,
+    }));
+    const html = generatePlayerHTML(JSON.stringify(buf), JSON.stringify(layersExport));
     const blob = new Blob([html], { type: "text/html" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -1251,12 +1680,14 @@ export default function PuppetMaster() {
               ref={mocapCanvasRef}
               width={MOCAP_W}
               height={MOCAP_H}
+              onClick={handleMoCapClick}
               style={{
                 width: 280,
                 height: 210,
-                border: "1px solid #444",
+                border: bindingLayerId ? "2px solid #e67e22" : "1px solid #444",
                 display: modelLoaded ? "block" : "none",
                 transform: "scaleX(-1)",
+                cursor: bindingLayerId ? "crosshair" : "default",
               }}
             />
             {!modelLoaded && !error && (
@@ -1315,14 +1746,21 @@ export default function PuppetMaster() {
               borderBottom: "1px solid #333",
             }}
           >
-            <span>Stage</span>
+            <span>
+              Stage
+              {activeLayerId !== null && (
+                <span style={{ color: "#3d8dcc", marginLeft: 6 }}>
+                  [{layers.find((l) => l.id === activeLayerId) ? ASSET_LABEL[layers.find((l) => l.id === activeLayerId)!.asset] : "?"}]
+                </span>
+              )}
+            </span>
             {isRecording && (
               <span className="flex items-center gap-1">
                 <span
                   className="inline-block w-2 h-2 rounded-full animate-pulse"
                   style={{ background: "#ec1c24" }}
                 />
-                <span style={{ color: "#ec1c24" }}>REC</span>
+                <span style={{ color: "#ec1c24" }}>REC {activeLayerId !== null ? "(Asset)" : "(Puppet)"}</span>
               </span>
             )}
             {isPlaying && (
@@ -1379,7 +1817,7 @@ export default function PuppetMaster() {
                 >
                   {gestureHud.mode === "get_ready" ? (
                     <>
-                      <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: "#888" }}>
+                      <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: "#333" }}>
                         Get ready
                       </div>
                       <div className="text-4xl font-bold tabular-nums mb-2" style={{ color: "#ec1c24" }}>
@@ -1389,7 +1827,7 @@ export default function PuppetMaster() {
                     </>
                   ) : (
                     <>
-                      <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: "#888" }}>
+                      <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: "#333" }}>
                         Hold pose · {gestureHud.side === "right" ? "Right hand" : "Left hand"}
                       </div>
                       <div className="text-4xl font-bold tabular-nums mb-2" style={{ color: "#ec1c24" }}>
@@ -1421,17 +1859,17 @@ export default function PuppetMaster() {
           <div className="flex-1 p-3 flex flex-col gap-4 min-h-0" style={{ background: "#f0f0f0" }}>
             {/* Stats */}
             <div>
-              <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: "#888" }}>
+              <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: "#333" }}>
                 Performance
               </div>
               <div className="flex justify-between text-[11px] mb-1">
-                <span style={{ color: "#888" }}>FPS</span>
+                <span style={{ color: "#333" }}>FPS</span>
                 <span className="mono font-semibold" style={{ color: fps >= 24 ? "#1a1a1a" : "#ec1c24" }}>
                   {fps}
                 </span>
               </div>
               <div className="flex justify-between text-[11px]">
-                <span style={{ color: "#888" }}>Frames</span>
+                <span style={{ color: "#333" }}>Frames</span>
                 <span className="mono font-semibold">{frameCount}</span>
               </div>
             </div>
@@ -1440,12 +1878,12 @@ export default function PuppetMaster() {
 
             {/* Character */}
             <div>
-              <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: "#888" }}>
+              <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: "#333" }}>
                 Character
               </div>
               <div
                 className="px-2 py-1.5 rounded text-[11px] mb-2"
-                style={{ background: "#e0e0e0", border: "1px solid #c0c0c0" }}
+                style={{ background: "#e0e0e0", border: "1px solid #c0c0c0", color: "#1a1a1a" }}
               >
                 Puppet (Default)
               </div>
@@ -1464,62 +1902,161 @@ export default function PuppetMaster() {
 
             <div style={{ borderTop: "1px solid #d0d0d0" }} />
 
-            {/* Layered motion — WIP (pitch: multi-asset mocap) */}
+            {/* Recording Target & Layers */}
             <div>
-              <div className="text-[10px] uppercase tracking-wider font-semibold mb-1" style={{ color: "#888" }}>
-                Layered assets
-              </div>
-              <p className="text-[10px] mb-2" style={{ color: "#666", lineHeight: 1.35 }}>
-                Import rigs or motion layers to drive extra props/characters on top of your base take (in progress).
-              </p>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "#333" }}>
+                  Recording Target
+                </span>
                 <button
-                  type="button"
-                  disabled
-                  title="Coming soon"
-                  className="w-full px-2 py-1.5 rounded text-[10px] font-medium text-left cursor-not-allowed opacity-60"
-                  style={{
-                    background: "#e8e8e8",
-                    border: "1px dashed #b0b0b0",
-                    color: "#444",
-                  }}
+                  onClick={addLayer}
+                  className="text-[10px] font-semibold"
+                  style={{ color: "#ec1c24" }}
                 >
-                  Import sprite / rig…
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  title="Coming soon"
-                  className="w-full px-2 py-1.5 rounded text-[10px] font-medium text-left cursor-not-allowed opacity-60"
-                  style={{
-                    background: "#e8e8e8",
-                    border: "1px dashed #b0b0b0",
-                    color: "#444",
-                  }}
-                >
-                  Import motion layer (.json)…
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  title="Coming soon"
-                  className="w-full px-2 py-1.5 rounded text-[10px] font-medium text-left cursor-not-allowed opacity-60"
-                  style={{
-                    background: "#e8e8e8",
-                    border: "1px dashed #b0b0b0",
-                    color: "#444",
-                  }}
-                >
-                  Asset library…
+                  + Add Layer
                 </button>
               </div>
+
+              {/* Puppet target (always present) */}
+              <div
+                onClick={() => selectActiveLayer(null)}
+                className="mb-2 p-2 rounded cursor-pointer"
+                style={{
+                  background: activeLayerId === null ? "#e8f5e9" : "#e8e8e8",
+                  border: `2px solid ${activeLayerId === null ? "#4caf50" : "transparent"}`,
+                }}
+              >
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  {activeLayerId === null && (
+                    <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: "#4caf50" }} />
+                  )}
+                  <span className="font-semibold" style={{ color: "#1a1a1a" }}>2D Character (Puppet)</span>
+                </div>
+                <div className="text-[9px] mt-0.5" style={{ color: "#333" }}>
+                  {bufferRef.current.length > 0 ? `${bufferRef.current.length} frames` : "No frames"}
+                </div>
+              </div>
+
+              {layers.length === 0 && (
+                <p className="text-[10px]" style={{ color: "#444" }}>
+                  No asset layers yet. Add one to track props on body parts.
+                </p>
+              )}
+
+              {layers.map((layer) => (
+                <div
+                  key={layer.id}
+                  onClick={() => selectActiveLayer(layer.id)}
+                  className="mb-2 p-2 rounded cursor-pointer"
+                  style={{
+                    background: activeLayerId === layer.id
+                      ? "#e3f2fd"
+                      : bindingLayerId === layer.id
+                        ? "#fff3e0"
+                        : "#e8e8e8",
+                    border: `2px solid ${activeLayerId === layer.id ? "#3d8dcc" : bindingLayerId === layer.id ? "#e67e22" : "transparent"}`,
+                  }}
+                >
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <div className="flex items-center gap-1.5 truncate">
+                      {activeLayerId === layer.id && (
+                        <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: "#3d8dcc" }} />
+                      )}
+                      <span className="font-semibold truncate" style={{ color: "#1a1a1a" }}>{ASSET_LABEL[layer.asset]}</span>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}
+                      className="text-[11px] ml-1 shrink-0"
+                      style={{ color: "#444" }}
+                    >
+                      x
+                    </button>
+                  </div>
+
+                  {/* Asset selector */}
+                  <select
+                    value={layer.asset}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => updateLayer(layer.id, { asset: e.target.value as BuiltinAsset })}
+                    className="w-full text-[10px] mb-1.5 p-1 rounded"
+                    style={{ background: "#fff", border: "1px solid #ccc", color: "#1a1a1a" }}
+                  >
+                    {Object.entries(ASSET_LABEL).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+
+                  {/* Binding */}
+                  <div className="text-[10px] mb-1">
+                    {layer.boundLandmark !== null ? (
+                      <span>
+                        Bound to:{" "}
+                        <strong>
+                          {TRACKABLE_LANDMARKS.find((t) => t.idx === layer.boundLandmark)?.label ?? "?"}
+                        </strong>
+                        <button
+                          onClick={() => enterBindMode(layer.id)}
+                          className="ml-1"
+                          style={{ color: "#e67e22" }}
+                        >
+                          rebind
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => enterBindMode(layer.id)}
+                        className="font-semibold"
+                        style={{ color: "#ec1c24" }}
+                      >
+                        Bind to body part...
+                      </button>
+                    )}
+                  </div>
+
+                  {bindingLayerId === layer.id && (
+                    <div className="text-[9px] px-1 py-0.5 rounded mb-1" style={{ background: "#fff3e0", color: "#e67e22" }}>
+                      Click a hotspot in MoCap Studio
+                    </div>
+                  )}
+
+                  {/* Frame count */}
+                  <div className="text-[9px] mb-1" style={{ color: "#333" }}>
+                    {layer.buffer.length > 0 ? `${layer.buffer.length} frames recorded` : "No frames"}
+                  </div>
+
+                  {/* Scale */}
+                  <div className="flex items-center gap-1 text-[9px]" style={{ color: "#333" }} onClick={(e) => e.stopPropagation()}>
+                    <span>Scale</span>
+                    <input
+                      type="range"
+                      min="0.3"
+                      max="3"
+                      step="0.1"
+                      value={layer.scale}
+                      onChange={(e) => updateLayer(layer.id, { scale: parseFloat(e.target.value) })}
+                      className="flex-1"
+                    />
+                    <span className="mono w-6 text-right">{layer.scale.toFixed(1)}</span>
+                  </div>
+
+                  {/* Visibility */}
+                  <label className="flex items-center gap-1 text-[9px] mt-1 cursor-pointer" style={{ color: "#333" }} onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={layer.visible}
+                      onChange={(e) => updateLayer(layer.id, { visible: e.target.checked })}
+                    />
+                    Visible
+                  </label>
+                </div>
+              ))}
             </div>
 
             <div style={{ borderTop: "1px solid #d0d0d0" }} />
 
             {/* Smoothing info */}
             <div>
-              <div className="text-[10px] uppercase tracking-wider font-semibold mb-1" style={{ color: "#888" }}>
+              <div className="text-[10px] uppercase tracking-wider font-semibold mb-1" style={{ color: "#333" }}>
                 Processing
               </div>
               <div className="text-[11px]">
@@ -1593,11 +2130,11 @@ export default function PuppetMaster() {
 
           <div className="flex-1" />
 
-          <span className="text-[9px] hidden sm:inline" style={{ color: "#666" }}>
+          <span className="text-[9px] hidden sm:inline" style={{ color: "#444" }}>
             Drag red/white trim handles · click to scrub
           </span>
 
-          <span className="mono text-[10px]" style={{ color: "#888" }}>
+          <span className="mono text-[10px]" style={{ color: "#333" }}>
             {hasFrames
               ? `Frame ${isPlaying ? pbIdxRef.current + 1 : frameCount} / ${frameCount}`
               : "No frames recorded"}
@@ -1608,7 +2145,7 @@ export default function PuppetMaster() {
         <canvas
           ref={tlCanvasRef}
           width={1400}
-          height={TIMELINE_H}
+          height={TIMELINE_H_BASE + layers.length * LAYER_TRACK_H}
           onMouseDown={onTimelineMouseDown}
           style={{
             flex: 1,
